@@ -8,9 +8,23 @@ class AnalysisService {
     if (!ingredientsText) {
       return {
         userType,
-        healthScore: 10,
+        healthScore: 100,
         category: "Healthy",
-        analysis: []
+        totalIngredients: 0,
+
+        analysis: [],
+
+        groupedAnalysis: {
+          healthy: [],
+          moderate: [],
+          harmful: [],
+          additives: [],
+          allergens: [],
+        },
+
+        explanations: [
+          "No ingredients detected. Product assumed safe."
+        ]
       };
     }
 
@@ -21,65 +35,200 @@ class AnalysisService {
       .filter(i => i.length > 0);
 
     let totalRisk = 0;
+
     const analysis = [];
 
+    const groupedAnalysis = {
+      healthy: [],
+      moderate: [],
+      harmful: [],
+      additives: [],
+      allergens: [],
+    };
+
+    const explanations = [];
+
     ingredients.forEach(item => {
+
       let matched = false;
 
       for (const key in ingredientDatabase) {
 
-        // convert palm_oil → palm oil
         const formattedKey = key.replace(/_/g, " ");
 
         if (item.includes(formattedKey)) {
+
           const data = ingredientDatabase[key];
 
-          // Personalized risk logic
-          let risk = data.baseRisk;
+          let risk = data.baseRisk || 0;
 
-          if (userType !== "general" && data.conditions[userType]) {
+          if (
+            userType !== "general" &&
+            data.conditions?.[userType]
+          ) {
             risk = data.conditions[userType];
           }
 
           totalRisk += risk;
 
-          analysis.push({
-            ingredient: item,
+          /* ===============================
+             Severity
+          =============================== */
+
+          let severity = "Low";
+
+          if (risk >= 3) {
+            severity = "High";
+          } else if (risk === 2) {
+            severity = "Medium";
+          }
+
+          /* ===============================
+             Detailed Ingredient Analysis
+          =============================== */
+
+          const ingredientAnalysis = {
+            ingredient: item.toUpperCase(),
             matchedWith: key,
             status: data.status,
             riskScore: risk,
+            severity,
             reason: data.reason,
-            concerns: data.concerns
-          });
+            concerns: data.concerns || [],
+          };
+
+          analysis.push(ingredientAnalysis);
+
+          /* ===============================
+             Grouped Categories
+          =============================== */
+
+          switch (data.status?.toLowerCase()) {
+
+            case "healthy":
+              groupedAnalysis.healthy.push(
+                item.toUpperCase()
+              );
+              break;
+
+            case "moderate":
+              groupedAnalysis.moderate.push(
+                item.toUpperCase()
+              );
+              break;
+
+            case "harmful":
+              groupedAnalysis.harmful.push(
+                item.toUpperCase()
+              );
+              break;
+
+            case "additive":
+              groupedAnalysis.additives.push(
+                item.toUpperCase()
+              );
+              break;
+          }
+
+          /* ===============================
+             Allergens
+          =============================== */
+
+          if (
+            data.concerns?.some(c =>
+              c.toLowerCase().includes("allergen")
+            )
+          ) {
+            groupedAnalysis.allergens.push(
+              item.toUpperCase()
+            );
+          }
+
+          /* ===============================
+             Explainable AI
+          =============================== */
+
+          explanations.push(
+            `${severity} Risk: ${item.toUpperCase()} — ${data.reason}`
+          );
 
           matched = true;
           break;
         }
       }
 
+      /* ===============================
+         Unknown Ingredient
+      =============================== */
+
       if (!matched) {
+
         analysis.push({
-          ingredient: item,
+          ingredient: item.toUpperCase(),
           status: "Unknown",
           riskScore: 0,
+          severity: "Unknown",
           reason: "Not found in database",
-          concerns: []
+          concerns: [],
         });
+
+        explanations.push(
+          `Unknown Ingredient: ${item.toUpperCase()}`
+        );
       }
     });
 
-    const healthScore = Math.max(10 - totalRisk, 1);
+    /* ===============================
+       Dynamic Health Score
+    =============================== */
+
+    const maxRiskPerIngredient = 3;
+
+    const maxPossibleRisk =
+      ingredients.length * maxRiskPerIngredient;
+
+    let healthScore = 100;
+
+    if (maxPossibleRisk > 0) {
+
+      const normalizedScore =
+        100 - (totalRisk / maxPossibleRisk) * 100;
+
+      healthScore = Math.round(normalizedScore);
+    }
+
+    healthScore = Math.max(
+      1,
+      Math.min(100, healthScore)
+    );
+
+    /* ===============================
+       Category
+    =============================== */
 
     let category = "Healthy";
-    if (healthScore <= 4) category = "Unhealthy";
-    else if (healthScore <= 7) category = "Moderate";
+
+    if (healthScore < 40) {
+      category = "Unhealthy";
+    } else if (healthScore < 70) {
+      category = "Moderate";
+    }
+
+    explanations.unshift(
+      `Final Health Score: ${healthScore}/100`
+    );
 
     return {
       userType,
       healthScore,
       category,
       totalIngredients: ingredients.length,
-      analysis
+
+      analysis,
+
+      groupedAnalysis,
+
+      explanations
     };
   }
 }
