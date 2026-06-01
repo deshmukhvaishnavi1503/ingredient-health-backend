@@ -11,16 +11,17 @@ const app = express();
    Middleware
 ================================= */
 
-// Allow frontend connection
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",
+      "https://ingredient-health-frontend.vercel.app"
+    ],
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
   })
 );
 
-// JSON body parser (large base64 images allowed)
 app.use(express.json({ limit: "25mb" }));
 
 /* ===============================
@@ -34,14 +35,12 @@ app.get("/", (req, res) => {
 });
 
 /* ===============================
-   IMPORTANT: Main Analyze Route
-   Final Endpoint:
-   http://localhost:5001/api/analyze
+   API Routes
 ================================= */
 app.use("/api", analyzeRoutes);
 
 /* ===============================
-   Simple Route Debug Test
+   Test Route
 ================================= */
 app.get("/api/test", (req, res) => {
   res.json({ message: "API route working properly ✅" });
@@ -76,5 +75,4 @@ const PORT = process.env.PORT || 5001;
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-
 });
