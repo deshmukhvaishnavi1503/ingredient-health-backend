@@ -8,24 +8,26 @@ import analyzeRoutes from "./routes/analysisRoutes.js";
 const app = express();
 
 /* ===============================
-   Middleware
+   CORS CONFIG (PRODUCTION SAFE)
 ================================= */
-
 app.use(
   cors({
     origin: [
       "http://localhost:5173",
       "https://ingredient-health-frontend.vercel.app"
     ],
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type"],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
+/* ===============================
+   MIDDLEWARE
+================================= */
 app.use(express.json({ limit: "25mb" }));
 
 /* ===============================
-   Health Check Route
+   HEALTH CHECK ROUTE
 ================================= */
 app.get("/", (req, res) => {
   res.status(200).json({
@@ -35,19 +37,22 @@ app.get("/", (req, res) => {
 });
 
 /* ===============================
-   API Routes
+   TEST ROUTE
+================================= */
+app.get("/api/test", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "API route working properly ✅",
+  });
+});
+
+/* ===============================
+   API ROUTES
 ================================= */
 app.use("/api", analyzeRoutes);
 
 /* ===============================
-   Test Route
-================================= */
-app.get("/api/test", (req, res) => {
-  res.json({ message: "API route working properly ✅" });
-});
-
-/* ===============================
-   404 Handler
+   404 HANDLER
 ================================= */
 app.use((req, res) => {
   res.status(404).json({
@@ -57,22 +62,22 @@ app.use((req, res) => {
 });
 
 /* ===============================
-   Global Error Handler
+   GLOBAL ERROR HANDLER
 ================================= */
 app.use((err, req, res, next) => {
-  console.error("🔥 Global Server Error:", err);
+  console.error("🔥 Server Error:", err);
 
   res.status(500).json({
     success: false,
-    message: "Server error",
+    message: "Internal Server Error",
   });
 });
 
 /* ===============================
-   Start Server
+   START SERVER (RENDER FIX)
 ================================= */
 const PORT = process.env.PORT || 5001;
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
