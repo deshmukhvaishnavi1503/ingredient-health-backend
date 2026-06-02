@@ -3,6 +3,7 @@
 import ingredientDatabase from "../data/ingredientDatabase.js";
 
 class AnalysisService {
+
   analyze(ingredientsText, userType = "general") {
 
     if (!ingredientsText) {
@@ -28,13 +29,21 @@ class AnalysisService {
       };
     }
 
+    /* ===============================
+       OCR CLEANING
+    =============================== */
+
     const ingredients = ingredientsText
       .toLowerCase()
+      .replace(/\n/g, ",")
+      .replace(/contains:/gi, "")
+      .replace(/may contain:/gi, "")
+      .replace(/less than \d+%/gi, "")
+      .replace(/\band\b/gi, "")
+      .replace(/\./g, ",")
       .split(",")
       .map(i => i.trim())
-      .filter(i => i.length > 0);
-
-    let totalRisk = 0;
+      .filter(Boolean);
 
     const analysis = [];
 
@@ -48,17 +57,46 @@ class AnalysisService {
 
     const explanations = [];
 
+    /* ===============================
+       NORMALIZER
+    =============================== */
+
+    const normalize = (str) =>
+      str
+        .toLowerCase()
+        .replace(/[^a-z]/g, "");
+
+    /* ===============================
+       🔥 PRIORITY SORTING (IMPORTANT FIX)
+       Harmful ingredients checked FIRST
+    =============================== */
+
+    const sortedKeys = Object.keys(ingredientDatabase).sort((a, b) => {
+      const aPriority = ingredientDatabase[a].status === "harmful" ? 0 : 1;
+      const bPriority = ingredientDatabase[b].status === "harmful" ? 0 : 1;
+      return aPriority - bPriority;
+    });
+
     ingredients.forEach(item => {
 
       let matched = false;
 
-      for (const key in ingredientDatabase) {
+      const normalizedItem = normalize(item);
 
-        const formattedKey = key.replace(/_/g, " ");
+      for (const key of sortedKeys) {
 
-        if (item.includes(formattedKey)) {
+        const data = ingredientDatabase[key];
 
-          const data = ingredientDatabase[key];
+        const normalizedKey = normalize(key);
+
+        /* ===============================
+           IMPROVED MATCHING LOGIC
+        =============================== */
+
+        if (
+          normalizedItem.includes(normalizedKey) ||
+          normalizedKey.includes(normalizedItem)
+        ) {
 
           let risk = data.baseRisk || 0;
 
@@ -69,84 +107,56 @@ class AnalysisService {
             risk = data.conditions[userType];
           }
 
-          totalRisk += risk;
-
-          /* ===============================
-             Severity
-          =============================== */
-
           let severity = "Low";
 
-          if (risk >= 3) {
-            severity = "High";
-          } else if (risk === 2) {
-            severity = "Medium";
-          }
+          if (risk >= 3) severity = "High";
+          else if (risk >= 2) severity = "Medium";
 
-          /* ===============================
-             Detailed Ingredient Analysis
-          =============================== */
-
-          const ingredientAnalysis = {
+          analysis.push({
             ingredient: item.toUpperCase(),
             matchedWith: key,
             status: data.status,
             riskScore: risk,
             severity,
             reason: data.reason,
-            concerns: data.concerns || [],
-          };
-
-          analysis.push(ingredientAnalysis);
-
-          /* ===============================
-             Grouped Categories
-          =============================== */
+            concerns: data.concerns || []
+          });
 
           switch (data.status?.toLowerCase()) {
 
             case "healthy":
-              groupedAnalysis.healthy.push(
-                item.toUpperCase()
-              );
+              groupedAnalysis.healthy.push(item.toUpperCase());
               break;
 
             case "moderate":
-              groupedAnalysis.moderate.push(
-                item.toUpperCase()
-              );
+              groupedAnalysis.moderate.push(item.toUpperCase());
               break;
 
             case "harmful":
-              groupedAnalysis.harmful.push(
-                item.toUpperCase()
-              );
+              groupedAnalysis.harmful.push(item.toUpperCase());
               break;
 
             case "additive":
-              groupedAnalysis.additives.push(
-                item.toUpperCase()
-              );
+              groupedAnalysis.additives.push(item.toUpperCase());
+              break;
+
+            case "allergen":
+              groupedAnalysis.allergens.push(item.toUpperCase());
               break;
           }
 
-          /* ===============================
-             Allergens
-          =============================== */
-
+          /* Extra allergen detection */
           if (
             data.concerns?.some(c =>
               c.toLowerCase().includes("allergen")
             )
           ) {
-            groupedAnalysis.allergens.push(
-              item.toUpperCase()
-            );
+            if (
+              !groupedAnalysis.allergens.includes(item.toUpperCase())
+            ) {
+              groupedAnalysis.allergens.push(item.toUpperCase());
+            }
           }
-
-          /* ===============================
-             Explainable AI
-          =============================== */
 
           explanations.push(
             `${severity} Risk: ${item.toUpperCase()} — ${data.reason}`
@@ -158,7 +168,7 @@ class AnalysisService {
       }
 
       /* ===============================
-         Unknown Ingredient
+         UNKNOWN INGREDIENT
       =============================== */
 
       if (!matched) {
@@ -166,10 +176,10 @@ class AnalysisService {
         analysis.push({
           ingredient: item.toUpperCase(),
           status: "Unknown",
-          riskScore: 0,
+          riskScore: 0.5,
           severity: "Unknown",
-          reason: "Not found in database",
-          concerns: [],
+          reason: "Ingredient not found in database",
+          concerns: []
         });
 
         explanations.push(
@@ -179,40 +189,56 @@ class AnalysisService {
     });
 
     /* ===============================
-       Dynamic Health Score
+       REMOVE DUPLICATES
     =============================== */
 
-    const maxRiskPerIngredient = 3;
+    groupedAnalysis.healthy = [...new Set(groupedAnalysis.healthy)];
+    groupedAnalysis.moderate = [...new Set(groupedAnalysis.moderate)];
+    groupedAnalysis.harmful = [...new Set(groupedAnalysis.harmful)];
+    groupedAnalysis.additives = [...new Set(groupedAnalysis.additives)];
+    groupedAnalysis.allergens = [...new Set(groupedAnalysis.allergens)];
 
-    const maxPossibleRisk =
-      ingredients.length * maxRiskPerIngredient;
+    /* ===============================
+       HEALTH SCORE
+    =============================== */
 
-    let healthScore = 100;
+    const healthyCount = groupedAnalysis.healthy.length;
+    const moderateCount = groupedAnalysis.moderate.length;
+    const additiveCount = groupedAnalysis.additives.length;
+    const harmfulCount = groupedAnalysis.harmful.length;
+    const allergenCount = groupedAnalysis.allergens.length;
 
-    if (maxPossibleRisk > 0) {
+    let healthScore = 80;
 
-      const normalizedScore =
-        100 - (totalRisk / maxPossibleRisk) * 100;
+    healthScore += healthyCount * 2;
+    healthScore -= moderateCount * 0.5;
+    healthScore -= additiveCount * 0.3;
+    healthScore -= harmfulCount * 5;
+    healthScore -= allergenCount * 0.5;
 
-      healthScore = Math.round(normalizedScore);
-    }
-
-    healthScore = Math.max(
-      1,
-      Math.min(100, healthScore)
+    healthScore = Math.round(
+      Math.max(1, Math.min(100, healthScore))
     );
 
     /* ===============================
-       Category
+       CATEGORY
     =============================== */
 
     let category = "Healthy";
 
-    if (healthScore < 40) {
-      category = "Unhealthy";
-    } else if (healthScore < 70) {
-      category = "Moderate";
-    }
+    if (healthScore >= 80) category = "Healthy";
+    else if (healthScore >= 60) category = "Moderate";
+    else category = "Unhealthy";
+
+    /* ===============================
+       SORT
+    =============================== */
+
+    analysis.sort((a, b) => b.riskScore - a.riskScore);
+
+    /* ===============================
+       OUTPUT
+    =============================== */
 
     explanations.unshift(
       `Final Health Score: ${healthScore}/100`
@@ -223,11 +249,8 @@ class AnalysisService {
       healthScore,
       category,
       totalIngredients: ingredients.length,
-
       analysis,
-
       groupedAnalysis,
-
       explanations
     };
   }

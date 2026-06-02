@@ -62,23 +62,57 @@ const extractJSON = (text) => {
 ================================= */
 const calculateScore = (analysis) => {
 
-  let score = 100;
+  const healthy =
+    analysis.healthy?.length || 0;
 
-  score -= (analysis.harmful?.length || 0) * 12;
-  score -= (analysis.additives?.length || 0) * 6;
-  score -= (analysis.moderate?.length || 0) * 4;
+  const moderate =
+    analysis.moderate?.length || 0;
 
-  // Prevent unrealistic score
-  score = Math.max(25, score);
+  const additives =
+    analysis.additives?.length || 0;
+
+  const harmful =
+    analysis.harmful?.length || 0;
+
+  const allergens =
+    analysis.allergens?.length || 0;
+
+  // Base score
+  let score = 80;
+
+  // Nutrition impact
+  score += healthy * 2;
+  score -= moderate * 0.5;
+  score -= additives * 0.3;
+
+  // Stronger penalties (important change)
+  score -= harmful * 8;
+  score -= allergens * 1;
+
+  // Clamp score
+  score = Math.round(
+    Math.max(1, Math.min(100, score))
+  );
+
+  /* ===============================
+     RISK LEVEL LOGIC (IMPROVED)
+  ================================= */
 
   let riskLevel = "Low";
 
-  if (score < 70) {
-    riskLevel = "Medium";
+  // HIGH risk (priority first)
+  if (harmful >= 3 || score < 45) {
+    riskLevel = "High";
   }
 
-  if (score < 40) {
-    riskLevel = "High";
+  // MEDIUM risk
+  else if (
+    allergens >= 3 ||
+    harmful >= 1 ||
+    additives >= 8 ||
+    score < 70
+  ) {
+    riskLevel = "Medium";
   }
 
   return {
