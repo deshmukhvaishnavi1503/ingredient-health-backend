@@ -58,7 +58,7 @@ class AnalysisService {
     const explanations = [];
 
     /* ===============================
-       NORMALIZER
+       🔥 FIX: NORMALIZER (IMPORTANT)
     =============================== */
 
     const normalize = (str) =>
@@ -66,37 +66,27 @@ class AnalysisService {
         .toLowerCase()
         .replace(/[^a-z]/g, "");
 
-    /* ===============================
-       🔥 PRIORITY SORTING (IMPORTANT FIX)
-       Harmful ingredients checked FIRST
-    =============================== */
-
-    const sortedKeys = Object.keys(ingredientDatabase).sort((a, b) => {
-      const aPriority = ingredientDatabase[a].status === "harmful" ? 0 : 1;
-      const bPriority = ingredientDatabase[b].status === "harmful" ? 0 : 1;
-      return aPriority - bPriority;
-    });
-
     ingredients.forEach(item => {
 
       let matched = false;
 
       const normalizedItem = normalize(item);
 
-      for (const key of sortedKeys) {
+      for (const key in ingredientDatabase) {
 
-        const data = ingredientDatabase[key];
-
-        const normalizedKey = normalize(key);
+        const formattedKey = key.replace(/_/g, " ");
+        const normalizedKey = normalize(formattedKey);
 
         /* ===============================
-           IMPROVED MATCHING LOGIC
+           🔥 IMPROVED MATCHING LOGIC
         =============================== */
 
         if (
           normalizedItem.includes(normalizedKey) ||
           normalizedKey.includes(normalizedItem)
         ) {
+
+          const data = ingredientDatabase[key];
 
           let risk = data.baseRisk || 0;
 
@@ -109,8 +99,12 @@ class AnalysisService {
 
           let severity = "Low";
 
-          if (risk >= 3) severity = "High";
-          else if (risk >= 2) severity = "Medium";
+          if (risk >= 3) {
+            severity = "High";
+          }
+          else if (risk >= 2) {
+            severity = "Medium";
+          }
 
           analysis.push({
             ingredient: item.toUpperCase(),
@@ -226,9 +220,15 @@ class AnalysisService {
 
     let category = "Healthy";
 
-    if (healthScore >= 80) category = "Healthy";
-    else if (healthScore >= 60) category = "Moderate";
-    else category = "Unhealthy";
+    if (healthScore >= 80) {
+      category = "Healthy";
+    }
+    else if (healthScore >= 60) {
+      category = "Moderate";
+    }
+    else {
+      category = "Unhealthy";
+    }
 
     /* ===============================
        SORT
