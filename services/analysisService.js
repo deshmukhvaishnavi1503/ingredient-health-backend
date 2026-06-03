@@ -21,7 +21,6 @@ class AnalysisService {
           harmful: [],
           additives: [],
           allergens: [],
-          unclassified: []   // ✅ ADDED
         },
 
         explanations: [
@@ -54,13 +53,12 @@ class AnalysisService {
       harmful: [],
       additives: [],
       allergens: [],
-      unclassified: []   // ✅ ADDED
     };
 
     const explanations = [];
 
     /* ===============================
-       NORMALIZER
+       🔥 FIX: NORMALIZER (IMPORTANT)
     =============================== */
 
     const normalize = (str) =>
@@ -78,6 +76,10 @@ class AnalysisService {
 
         const formattedKey = key.replace(/_/g, " ");
         const normalizedKey = normalize(formattedKey);
+
+        /* ===============================
+           🔥 IMPROVED MATCHING LOGIC
+        =============================== */
 
         if (
           normalizedItem.includes(normalizedKey) ||
@@ -137,6 +139,7 @@ class AnalysisService {
               break;
           }
 
+          /* Extra allergen detection */
           if (
             data.concerns?.some(c =>
               c.toLowerCase().includes("allergen")
@@ -159,7 +162,7 @@ class AnalysisService {
       }
 
       /* ===============================
-         UNKNOWN / UNCLASSIFIED
+         UNKNOWN INGREDIENT
       =============================== */
 
       if (!matched) {
@@ -172,9 +175,6 @@ class AnalysisService {
           reason: "Ingredient not found in database",
           concerns: []
         });
-
-        // ✅ FIX: also push into grouped analysis
-        groupedAnalysis.unclassified.push(item.toUpperCase());
 
         explanations.push(
           `Unknown Ingredient: ${item.toUpperCase()}`
@@ -191,7 +191,6 @@ class AnalysisService {
     groupedAnalysis.harmful = [...new Set(groupedAnalysis.harmful)];
     groupedAnalysis.additives = [...new Set(groupedAnalysis.additives)];
     groupedAnalysis.allergens = [...new Set(groupedAnalysis.allergens)];
-    groupedAnalysis.unclassified = [...new Set(groupedAnalysis.unclassified)]; // ✅ ADDED
 
     /* ===============================
        HEALTH SCORE
